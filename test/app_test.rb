@@ -31,6 +31,19 @@ class AppTest < Minitest::Test
                  schedule: @schedule, weather: @weather, clock: -> { NOW })
   end
 
+  def test_station_without_live_data_yet
+    @client.missing = Sampler::POLL_KEYS # DELTA 2 Max hasn't sent anything since the start
+    @sampler.tick(NOW)
+    body = @app.call('/')[2]
+
+    assert_match %r{<span\ class="name">DELTA\ 2\ Max</span>\s*
+                    <span\ class="nums">\s*
+                    <strong>—</strong>\s*
+                    <span\ class="muted">—</span>}x,
+                 body
+    refute_match 'no live data', body
+  end
+
   def test_production_hides_stations_table
     body = production_app.call('/')[2]
 
@@ -61,8 +74,9 @@ class AppTest < Minitest::Test
     assert_match 'since 11:00', body
     refute_match 'unplanned', body
     assert_match %r{Without power today</div>\s*<div class="value bad">1h 00m</div>}, body
-    assert_match 'now 100 W · backup ~16 h', body   # 30 Ah × 54 V = 1620 Wh / 100 W
-    assert_match 'API 1006: not allowed', body      # station that can't be read
+    assert_match 'now 100 W', body
+    refute_match 'backup', body
+    assert_match 'API 1006: not allowed', body # station that can't be read
     # still listed
     assert_match %r{<span class="name">RIVER 3</span>\s*<span class="chip caps muted">unavailable</span>}, body
     assert_match 'DELTA 2 Max', body

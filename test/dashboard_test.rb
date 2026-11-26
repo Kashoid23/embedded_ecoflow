@@ -41,7 +41,7 @@ class DashboardTest < Minitest::Test
 
     assert_equal ['No power', :bad], banner.values_at(:title, :tone)
     assert_equal 'since 10:00', banner[:detail]
-    assert_equal({ label: 'Back at 16:00', value: '4:00', sub: '33% of outage passed' }, banner[:next])
+    assert_equal({ label: 'Back at 16:00', value: '4:00', icon: :hourglass }, banner[:next])
     assert_equal 33.3, banner[:progress] # 2 h of 6 h
   end
 
@@ -51,8 +51,8 @@ class DashboardTest < Minitest::Test
 
     banner = dashboard.banner
 
-    assert_equal 'since 00:00', banner[:detail]
-    assert_equal({ label: 'Next off 08:00', value: '20:00', sub: 'hours : minutes' }, banner[:next])
+    assert_nil banner[:detail] # no "since" while the power is on
+    assert_equal({ label: 'Next off 08:00', value: '20:00', icon: :hourglass }, banner[:next])
     assert_nil banner[:progress]
   end
 
@@ -102,7 +102,7 @@ class DashboardTest < Minitest::Test
     banner = dashboard({}).banner
 
     assert_equal ['Power on', :ok], banner.values_at(:title, :tone)
-    assert_equal 'since 08:00', banner[:detail]
+    assert_equal Time.new(2026, 11, 26, 8), dashboard({}).current[:since]
   end
 
   # After a gap (e.g. a restart) the state carries on over idle samples only
@@ -110,7 +110,8 @@ class DashboardTest < Minitest::Test
     (480...660).each { |m| @store.append(Time.new(2026, 11, 26) + m * 60, [{ sn: 'A', out: 50, grid: true }]) }
     (700..720).each { |m| @store.append(Time.new(2026, 11, 26) + m * 60, [{ sn: 'A', out: 0, grid: 'idle' }]) }
 
-    assert_equal ['Power on', 'since 11:40'], dashboard({}).banner.values_at(:title, :detail)
+    assert_equal 'Power on', dashboard({}).banner[:title]
+    assert_equal Time.new(2026, 11, 26, 11, 40), dashboard({}).current[:since]
   end
 
   def test_off_tile
@@ -121,20 +122,22 @@ class DashboardTest < Minitest::Test
     assert_nil dashboard({}).off_tile[:sub]
   end
 
-  def test_consumed_tile_with_backup
-    bms  = { 'bms_bmsStatus.remainCap' => 20_000, 'bms_bmsStatus.vol' => 51_200 } # 1024 Wh
-    page = dashboard(devices: [station(soc: 50, out: 30, **bms), station(soc: 100, out: 52, name: 'RIVER 2 Pro'),
+  # The load counts only the stations that answered
+  def test_consumed_tile
+    page = dashboard(devices: [station(soc: 50, out: 30), station(soc: 100, out: 52, name: 'RIVER 2 Pro'),
                                station(soc: 90, out: 999, error: 'API 1006')])
 
-    tile = page.consumed_tile
-
-    assert_equal ['Consumed today', '0 Wh'], tile.values_at(:label, :value)
-    assert_equal 'now 82 W · backup ~34 h', tile[:sub] # 1024 Wh / 30 W: RIVER 2 Pro doesn't report its charge
+    assert_equal({ label: 'Consumed today', value: '0 Wh', sub: 'now 82 W', sub_tone: 'accent' }, page.consumed_tile)
   end
 
-  def test_consumed_tile_without_backup
-    assert_equal 'now 3 W', dashboard(devices: [station(soc: 50, out: 3)]).consumed_tile[:sub] # load too low
-    assert_equal 'now 82 W', dashboard(devices: [station(soc: 50, out: 82)]).consumed_tile[:sub] # no battery data
+  def test_station_without_live_data_yet
+    waiting = station(soc: 0, out: 0).with(values: {})
+    page    = dashboard(devices: [station(soc: 50, out: 30), waiting])
+
+    assert_nil page.soc(waiting)
+    assert_nil page.problem(waiting)
+    assert_equal ['—', :muted], page.status(waiting)
+    assert_equal 'now 30 W', page.consumed_tile[:sub]
   end
 
   def test_timeline_is_one_track_with_plan_and_actual

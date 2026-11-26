@@ -6,9 +6,6 @@ module EcoflowDashboard
     class Dashboard
       include Helpers
 
-      # Below this total output the backup estimate is meaningless (and huge)
-      MIN_LOAD_WATTS = 5
-
       GRID_TONE = { on: :ok, off: :bad }.freeze
       GRID_LABEL = { on: 'on grid', off: 'on battery' }.freeze
 
@@ -49,30 +46,12 @@ module EcoflowDashboard
       end
 
       def consumed_tile
-        { label: 'Consumed today', value: energy(stats.consumed_wh), sub: load_line, sub_tone: 'accent' }
+        { label: 'Consumed today', value: energy(stats.consumed_wh), sub: "now #{load_watts.round} W",
+          sub_tone: 'accent' }
       end
 
       # Total output of the stations that answered, W
-      def load_watts = @load_watts ||= readable.sum { |d| out_watts(d) }
-
-      def out_watts(device) = device.values[GridDetector::OUT_KEY].to_f
-
-      # Hours the stored energy lasts at the current load, nil when it can't be told.
-      # Only stations whose battery reports its remaining charge count, with their own load
-      # (so it can differ from load_watts): each station feeds only what is plugged into it.
-      def backup_hours
-        known = readable.filter_map { |d| (wh = stored_wh(d)) && [wh, out_watts(d)] }
-        stored = known.sum(&:first)
-        load   = known.sum(&:last)
-        (stored / load).round if load >= MIN_LOAD_WATTS && stored.positive?
-      end
-
-      # Energy left in a station, Wh: remaining charge × pack voltage as its battery reports them;
-      # nil when it doesn't report them (RIVER 2 Pro)
-      def stored_wh(device)
-        mah, mv = device.values.values_at(*Sampler::BATTERY_KEYS)
-        mah * mv / 1_000_000.0 if mah && mv
-      end
+      def load_watts = @load_watts ||= readable.sum { |d| d.values[GridDetector::OUT_KEY].to_f }
 
       def schedule? = settings.schedule?
 
@@ -100,8 +79,8 @@ module EcoflowDashboard
 
       # The status banner at the top:
       #   title, tone — power on / no power / waiting for data
-      #   detail      — "since 10:00"
-      #   next        — right column: { label:, value:, sub: } countdown to the next change by the schedule
+      #   detail      — "since 10:00" while there is no power, nil when it is on
+      #   next        — right column: { label:, value:, sub:, icon: } countdown to the next change by the schedule
       #   progress    — % of the scheduled outage passed, only while there is no power during one
       def banner
         { title: { on: 'Power on', off: 'No power' }.fetch(grid, 'Waiting for data'),
@@ -159,14 +138,15 @@ module EcoflowDashboard
         end
       end
 
-      # Battery charge of a station, 0–100
-      def soc(device) = device.values['pd.soc'].to_i.clamp(0, 100)
+      # Battery charge of a station, 0–100; nil before its first reading (shown as "—")
+      def soc(device) = device.values['pd.soc']&.to_i&.clamp(0, 100)
 
       # [text, tone] for a station's status chip: what the station itself runs from,
       # or the house's grid state when the station can't tell (nothing flowing)
       def status(device)
         issue = problem(device)
         return [issue, :muted] if issue
+        return ['—', :muted] if device.values.empty? # nothing heard yet
 
         state = { true => :on, false => :off }.fetch(device.grid) { grid }
         [GRID_LABEL.fetch(state, '—'), GRID_TONE.fetch(state, :muted)]
@@ -192,12 +172,9 @@ module EcoflowDashboard
         { state: last[:state], since: time_at(date, last[:from]), until: ends } if today.to_time - ends < 1
       end
 
-      def load_line
-        ["now #{load_watts.round} W", ("backup ~#{backup_hours} h" if backup_hours)].compact.join(' · ')
-      end
-
       def banner_detail
         return 'no data from the stations' unless grid
+        return if grid == :on
 
         started = current[:since]
         "since #{'yesterday ' if started.to_date < today}#{clock(started)}"
@@ -211,9 +188,9 @@ module EcoflowDashboard
         if change[:state] == :off && grid == :on
           { label: 'Scheduled off', sub: "#{clock(change[:from])}–#{clock(change[:until])}" }
         elsif change[:state] == :off
-          { label: "Back at #{clock(change[:until])}", value: left, sub: "#{outage_pct.round}% of outage passed" }
+          { label: "Back at #{clock(change[:until])}", value: left, icon: :hourglass }
         else
-          { label: "Next off #{clock(change[:until])}", value: left, sub: 'hours : minutes' }
+          { label: "Next off #{clock(change[:until])}", value: left, icon: :hourglass }
         end
       end
 

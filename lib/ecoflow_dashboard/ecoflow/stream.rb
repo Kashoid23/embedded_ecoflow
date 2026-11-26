@@ -47,12 +47,16 @@ module EcoflowDashboard
         sleep step until ready? || Time.now >= deadline
       end
 
-      # The latest values of the given keys; raises Client::Error when the
-      # station is offline or hasn't sent anything for STALE_AFTER
+      # The latest values of the given keys, {} when the station hasn't sent anything since the start;
+      # raises Client::Error when the station was refused, is offline or hasn't sent anything for STALE_AFTER
       def quota(sn, keys, now = Time.now)
         @mutex.synchronize do
           station = @station[sn]
-          raise Client::Error, station&.error || 'no live data yet' unless station&.heard_at
+          unless station&.heard_at
+            raise Client::Error, station.error if station&.error
+
+            return {}
+          end
           raise Client::Error, 'offline' unless station.online
 
           quiet = now - station.heard_at

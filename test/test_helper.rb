@@ -36,8 +36,8 @@ module TestSupport
 
       # With the grid present the load runs through the station's input (bypass)
       { 'pd.soc' => 80, 'inv.inputWatts' => grid ? out : 0, 'pd.wattsInSum' => grid ? out : 0, 'pd.wattsOutSum' => out,
-        'bms_emsStatus.dsgRemainTime' => grid ? 5999 : 125, 'bms_bmsStatus.outputWatts' => grid ? 0 : out,
-        'bms_bmsStatus.remainCap' => 30_000, 'bms_bmsStatus.vol' => 54_000 }.slice(*keys).except(*missing)
+        'bms_emsStatus.dsgRemainTime' => grid ? 5999 : 125, 'bms_bmsStatus.outputWatts' => grid ? 0 : out }
+        .slice(*keys).except(*missing)
     end
 
     def quota_all(_sn) = { 'pd.soc' => 80, 'inv.acInVol' => 230_000 }

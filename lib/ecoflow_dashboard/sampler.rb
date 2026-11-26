@@ -17,15 +17,11 @@ module EcoflowDashboard
     # Always requested: the stats and the station rows need them
     STAT_KEYS = %w[pd.soc pd.wattsOutSum].freeze
 
-    # Remaining charge (mAh) and pack voltage (mV) from the battery management system, for the
-    # backup estimate. Not every model reports them (RIVER 2 Pro doesn't); missing keys are just absent.
-    BATTERY_KEYS = %w[bms_bmsStatus.remainCap bms_bmsStatus.vol].freeze
-
     # Battery time left in minutes, the station's own forecast: only shown
     TIME_LEFT_KEY = 'bms_emsStatus.dsgRemainTime'
 
     # Requested from every station
-    POLL_KEYS = (STAT_KEYS + BATTERY_KEYS + GridDetector::KEYS + [TIME_LEFT_KEY]).uniq.freeze
+    POLL_KEYS = (STAT_KEYS + GridDetector::KEYS + [TIME_LEFT_KEY]).uniq.freeze
 
     DEVICE_LIST_TTL = 3600
 
@@ -55,6 +51,7 @@ module EcoflowDashboard
     def poll(device)
       data = @source.quota(device.sn, POLL_KEYS)
       raise Ecoflow::Client::Error, "no quota data (#{data.class})" unless data.is_a?(Hash)
+      return [device.with(values: {}, grid: nil, error: nil), nil] if data.empty? # nothing heard yet: shown as "—"
 
       grid_station = @settings.grid_station?(device.sn)
       grid = GridDetector.grid?(data)

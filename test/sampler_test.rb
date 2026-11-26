@@ -41,6 +41,16 @@ class SamplerTest < Minitest::Test
     assert_other_station_still_sampled(tick, 'EOFError')
   end
 
+  # Nothing from the station since the start: no error, no values (shown as "—"), no sample
+  def test_station_without_live_data_yet
+    @client.missing = Sampler::POLL_KEYS
+    waiting = tick.devices.find { |d| d.sn == 'AAA1' }
+
+    assert_empty @store.read(NOW.to_date)
+    assert_nil waiting.error
+    assert_empty waiting.values
+  end
+
   def test_station_without_quota_data
     assert_other_station_still_sampled(tick, 'no quota data')
   end

@@ -37,7 +37,21 @@
   .banner-next { text-align: right; white-space: nowrap; }
   .banner-next .small { display: block; font-size: 12px; font-weight: 600; opacity: .8; }
   .banner-next .small.caps { text-transform: uppercase; letter-spacing: .06em; }
-  .banner-next .countdown { display: block; font: 700 30px/1.1 var(--mono); }
+  .banner-next .countdown { display: flex; align-items: center; justify-content: flex-end; gap: 6px; font: 700 30px/1.1 var(--mono); }
+  .next-icon { flex: none; width: 24px; height: 24px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; opacity: .8; }
+  /* Sand pours from the top bulb into the bottom one */
+  .next-icon .sand { fill: currentColor; stroke: none; transform-box: fill-box; transform-origin: bottom center; }
+  /* steps(): a few redraws a second instead of every frame (SVG parts repaint, not composite) */
+  .next-icon .sand-top    { animation: sand-top 4s steps(8) infinite; }
+  .next-icon .sand-bottom { animation: sand-bottom 4s steps(8) infinite; }
+  .next-icon .sand-stream { stroke-width: 1; stroke-dasharray: 1.5 1.5; animation: sand-stream 1s steps(2) infinite; }
+  @keyframes sand-top    { from { transform: scaleY(1); } to { transform: scaleY(0); } }
+  @keyframes sand-bottom { from { transform: scaleY(0); } to { transform: scaleY(1); } }
+  @keyframes sand-stream { to { stroke-dashoffset: -3; } }
+  @media (prefers-reduced-motion: reduce) {
+    .next-icon .sand-top, .next-icon .sand-bottom, .next-icon .sand-stream { animation: none; }
+    .next-icon .sand-top { transform: scaleY(.5); } .next-icon .sand-bottom { transform: scaleY(.6); }
+  }
   /* Share of the scheduled outage passed, only during an outage */
   .progress { height: 4px; margin-top: 8px; background: rgba(255, 255, 255, .12); border-radius: 99px; overflow: hidden; }
   .progress > div { height: 100%; background: currentColor; }
@@ -79,6 +93,7 @@
     .banner-state strong, .banner-next .countdown { font-size: 24px; }
     .banner-detail { font-size: 13px; }
     .banner-next .small { font-size: 10px; }
+    .next-icon { width: 18px; height: 18px; }
     .kpi { padding: 8px 12px; gap: 0; }
     .kpi .value { font-size: 20px; }
     .kpi .sub { font-size: 11px; }
@@ -112,12 +127,24 @@
     <div class="banner-row">
       <div class="banner-state">
         <strong><%= banner[:title] %></strong>
-        <span class="banner-detail"><%= banner[:detail] %></span>
+        <%- if banner[:detail] -%><span class="banner-detail"><%= banner[:detail] %></span><%- end -%>
       </div>
       <div class="banner-next">
         <span class="small caps"><%= upcoming[:label] %></span>
-        <%- if upcoming[:value] -%><span class="countdown"><%= upcoming[:value] %></span><%- end -%>
-        <span class="small"><%= upcoming[:sub] %></span>
+        <%- if upcoming[:value] -%>
+          <span class="countdown">
+            <%- if upcoming[:icon] == :hourglass -%>
+              <svg class="next-icon" viewBox="0 0 24 24" role="img" aria-label="Time left">
+                <path d="M6 2h12M6 22h12M7 2v3a5 5 0 0 0 10 0V2M7 22v-3a5 5 0 0 1 10 0v3"/>
+                <path class="sand sand-top" d="M8 5h8a4 4 0 0 1-4 4a4 4 0 0 1-4-4z"/>
+                <path class="sand-stream" d="M12 9.5v11"/>
+                <path class="sand sand-bottom" d="M8.5 21c0-2 1.6-3.5 3.5-3.5s3.5 1.5 3.5 3.5z"/>
+              </svg>
+            <%- end -%>
+            <%= upcoming[:value] %>
+          </span>
+        <%- end -%>
+        <%- if upcoming[:sub] -%><span class="small"><%= upcoming[:sub] %></span><%- end -%>
       </div>
     </div>
     <%- if banner[:progress] -%>
@@ -148,17 +175,16 @@
       <%- page.devices.each do |device| -%>
         <div class="station">
           <span class="name"><%= h device.name %></span>
+          <%- soc = page.soc(device) -%>
           <%- if (problem = page.problem(device)) -%>
             <span class="chip caps muted"><%= problem %></span>
-            <div class="meter"></div>
           <%- else -%>
-            <%- soc = page.soc(device) -%>
             <span class="nums">
-              <strong><%= soc %>%</strong>
+              <strong><%= soc ? "#{soc}%" : "—" %></strong>
               <span class="muted"><%= h quota(device, "pd.wattsOutSum") %></span>
             </span>
-            <div class="meter"><div class="<%= soc_tone(soc) %>" style="width: <%= soc %>%"></div></div>
           <%- end -%>
+          <div class="meter"><%- if soc && !problem -%><div class="<%= soc_tone(soc) %>" style="width: <%= soc %>%"></div><%- end -%></div>
         </div>
       <%- end -%>
     </div>

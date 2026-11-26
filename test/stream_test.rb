@@ -39,8 +39,7 @@ class StreamTest < Minitest::Test
   end
 
   def test_no_message_yet
-    error = assert_raises(Ecoflow::Client::Error) { @stream.quota('R621', %w[pd.soc], NOW) }
-    assert_match 'no live data', error.message
+    assert_empty @stream.quota('R621', %w[pd.soc], NOW)
   end
 
   def test_station_gone_quiet
@@ -73,7 +72,7 @@ class StreamTest < Minitest::Test
 
   def test_snapshot_alone_is_not_live
     @stream.seed('R621')
-    assert_raises(Ecoflow::Client::Error) { @stream.quota('R621', %w[pd.soc], NOW) }
+    assert_empty @stream.quota('R621', %w[pd.soc], NOW)
   end
 
   def test_offline_status
@@ -93,7 +92,7 @@ class StreamTest < Minitest::Test
     @stream.receive('/open/acc/R621/quota', JSON.generate('typeCode' => 'pdStatus'), NOW)
     @stream.receive('/open/acc/OTHER/quota', mqtt('pdStatus', 'soc' => 1), NOW)
 
-    assert_raises(Ecoflow::Client::Error) { @stream.quota('R621', %w[pd.soc], NOW) }
+    assert_empty @stream.quota('R621', %w[pd.soc], NOW)
   end
 
   class FailingClient < FakeClient
