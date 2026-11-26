@@ -1,0 +1,29 @@
+<a class="back" href="/">← Back</a>
+
+<div>
+  <h1 style="margin: 0; font-size: 22px"><%= h device&.name || sn %></h1>
+  <div class="sn"><%= h sn %> · <%= quotas.size %> parameters</div>
+</div>
+
+<input type="search" id="filter" placeholder="Filter keys, e.g. watts, soc, temp" autofocus>
+<section class="card" style="overflow-x: auto">
+<table>
+  <thead><tr><th>Key</th><th>Value</th></tr></thead>
+  <tbody>
+    <%- quotas.each do |key, value| -%>
+      <tr><td class="key"><%= h key %></td><td class="val"><%= h format_value(key, value) %></td></tr>
+    <%- end -%>
+  </tbody>
+</table>
+</section>
+
+<script>
+  // Hide rows whose key doesn't contain the filter text
+  const filter = document.getElementById("filter");
+  filter.addEventListener("input", () => {
+    const q = filter.value.toLowerCase();
+    document.querySelectorAll("tbody tr").forEach(row => {
+      row.hidden = !row.cells[0].textContent.toLowerCase().includes(q);
+    });
+  });
+</script>

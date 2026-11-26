@@ -1,0 +1,64 @@
+# yaml-language-server: $schema=https://render.com/schema/render.yaml.json
+#
+# Render Blueprint. In the Render Dashboard: New → Blueprint → pick this repo → Apply.
+# Variables with `sync: false` have no value here: Render asks for them when you apply
+# the Blueprint and stores them encrypted. Nothing secret is committed to Git.
+
+services:
+  - type: web
+    name: ecoflow-dashboard
+    runtime: docker
+    # Free instance:
+    #   - sleeps after 15 min without requests, and no samples are taken while asleep.
+    #     Keep it awake with an external uptime monitor requesting /healthz every 10 min.
+    #     750 free hours a month cover one service running all month.
+    #   - no persistent disk: samples in DATA_DIR (/var/data, set in the Dockerfile) are
+    #     lost on every deploy or restart, so day and month stats start over.
+    plan: free
+    region: frankfurt
+    healthCheckPath: /healthz
+    autoDeploy: true
+
+    # To keep stats across deploys, switch to the paid plan with a disk:
+    # plan: starter
+    # disk:
+    #   name: ecoflow-data
+    #   mountPath: /var/data   # must match DATA_DIR in the Dockerfile
+    #   sizeGB: 1
+
+    envVars:
+      # --- secrets: entered in the Render Dashboard, encrypted at rest ---
+      - key: ECOFLOW_ACCESS_KEY
+        sync: false
+      - key: ECOFLOW_SECRET_KEY
+        sync: false
+
+      # --- personal, but not secret: also entered in the Dashboard ---
+      - key: ECOFLOW_SN
+        sync: false
+      - key: ECOFLOW_GRID_SN
+        sync: false
+      - key: OUTAGE_GROUP
+        sync: false
+      - key: OBLENERGO
+        sync: false
+      - key: WEATHER_LAT
+        sync: false
+      - key: WEATHER_LON
+        sync: false
+      - key: AIR_RAID_PROVIDER
+        sync: false
+      - key: AIR_RAID_TOKEN
+        sync: false
+      - key: AIR_RAID_REGION
+        sync: false
+
+      # --- regular settings ---
+      - key: ECOFLOW_REGION
+        value: eu
+      - key: ECOFLOW_SAMPLE_INTERVAL
+        value: "60"
+      - key: ECOFLOW_INTERVAL
+        value: "60"
+      - key: LOG_LEVEL
+        value: info

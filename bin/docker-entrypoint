@@ -1,0 +1,15 @@
+#!/bin/sh
+# Prepares the data directory and starts the app as the unprivileged "app" user.
+#
+# A persistent disk is usually mounted owned by root, so the app user couldn't write to it.
+# While still root, hand the directory over to "app", then drop root for the app itself.
+set -e
+
+mkdir -p "$DATA_DIR"
+
+if [ "$(id -u)" = "0" ]; then
+  chown -R app:app "$DATA_DIR"
+  exec setpriv --reuid=app --regid=app --init-groups "$@"
+fi
+
+exec "$@"

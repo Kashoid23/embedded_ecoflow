@@ -1,0 +1,205 @@
+<%# One page, two layouts: the full dashboard, and a compact one for a 480×480 display
+    (both sides ≤ 520px). .full-only blocks are hidden on the compact layout. %>
+<meta http-equiv="refresh" content="<%= refresh %>">
+<style>
+  /* Weather in the header */
+  .weather { display: flex; align-items: center; gap: 8px; }
+  .weather svg { width: 42px; height: 42px; fill: none; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+  .weather strong { font-size: 30px; font-variant-numeric: tabular-nums; }
+  .w-sun { stroke: var(--plan); } .w-moon { stroke: #c9d3e3; } .w-cloud { stroke: var(--muted); }
+  .w-rain { stroke: var(--accent); } .w-snow { fill: #e8ebf0; stroke: none; } .w-bolt { stroke: var(--plan); }
+
+  .clock { font-size: 24px; font-weight: 700; padding: 6px 0; }
+
+  /* Air-raid siren after the weather */
+  .head-left { display: flex; align-items: center; gap: 20px; }
+  .siren { width: 38px; height: 38px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+  .siren.none    { color: var(--ok); }
+  .siren.partial { color: var(--plan); }
+  .siren.partial .siren-dome { fill: var(--plan-bg); }
+  .siren.active  { color: var(--bad); animation: siren 1.2s ease-in-out infinite; }
+  .siren.active .siren-dome { fill: currentColor; }
+  .siren.unknown { color: var(--faint); }
+  @keyframes siren { 50% { opacity: .45; } }
+
+  /* Top row: status banner + Off + Consumed. Narrower: banner on its own row, tiles 2-up. */
+  .top { display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 12px; }
+  @media (max-width: 1100px) { .top { grid-template-columns: repeat(2, minmax(0, 1fr)); } .banner { grid-column: 1 / -1; } }
+  @media (max-width: 560px)  { .top { grid-template-columns: minmax(0, 1fr); } }
+  .banner { padding: 16px 20px; display: flex; flex-direction: column; justify-content: center; gap: 4px; border: 0; }
+  .banner.ok    { background: var(--ok-bg);  color: var(--ok); }
+  .banner.bad   { background: var(--bad-bg); color: var(--bad); }
+  .banner.muted { background: var(--card-2); color: var(--muted); }
+  /* State on the left, countdown to the next change by the schedule on the right */
+  .banner-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+  .banner-state strong { display: block; font-size: 30px; line-height: 1.1; text-transform: uppercase; letter-spacing: .02em; }
+  .banner-detail { font-size: 15px; font-weight: 600; }
+  .banner-next { text-align: right; white-space: nowrap; }
+  .banner-next .small { display: block; font-size: 12px; font-weight: 600; opacity: .8; }
+  .banner-next .small.caps { text-transform: uppercase; letter-spacing: .06em; }
+  .banner-next .countdown { display: block; font: 700 30px/1.1 var(--mono); }
+  /* Share of the scheduled outage passed, only during an outage */
+  .progress { height: 4px; margin-top: 8px; background: rgba(255, 255, 255, .12); border-radius: 99px; overflow: hidden; }
+  .progress > div { height: 100%; background: currentColor; }
+  .kpi { padding: 14px 16px; display: flex; flex-direction: column; justify-content: center; gap: 4px; }
+  .kpi .label { text-transform: uppercase; letter-spacing: .06em; font-weight: 600; }
+  .kpi .value { font-size: 24px; line-height: 1.2; white-space: nowrap; }
+  .kpi .sub.accent { color: var(--accent); }
+  /* Schedule and Stations, each on its own row */
+  .middle { display: flex; flex-direction: column; gap: 16px; }
+  .middle > .card { padding: 18px 20px; display: flex; flex-direction: column; justify-content: center; gap: 14px; min-width: 0; }
+  .outages { padding: 14px 20px; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; }
+  .outage-list { display: flex; flex-wrap: wrap; gap: 8px; }
+  /* Stations: name, battery bar, charge, output */
+  .station { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px 12px; font-size: 13px; }
+  .station .name { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-weight: 600; }
+  .station .nums { display: flex; gap: 12px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .station .meter { grid-column: 1 / -1; }
+  /* Outage chips by time: ended, in progress, next, later */
+  .chip.past  { background: var(--card-2); color: var(--faint); text-decoration: line-through; }
+  .chip.now   { background: var(--bad-bg); color: var(--bad); }
+  .chip.next  { background: var(--plan-bg); color: var(--plan-text); }
+  .chip.later { background: var(--card-2); color: #c9d3e3; }
+  .table-box { overflow-x: auto; }
+  .chip.caps { text-transform: uppercase; letter-spacing: .06em; font-size: 11px; }
+
+  /* ----- compact: 480×480 display ----- */
+  @media (max-width: 520px) and (max-height: 520px) {
+    html, body { background: #000; }
+    main { height: 100vh; overflow: hidden; padding: 12px; gap: 8px; }
+    .full-only { display: none !important; }
+    .weather svg { width: 32px; height: 32px; }
+    .weather strong { font-size: 24px; }
+    .page-head .pill { padding: 0; border: 0; background: none; color: var(--muted); }
+    .clock { font-size: 22px; padding: 0; color: var(--muted); }
+    .head-left { gap: 14px; }
+    .siren { width: 30px; height: 30px; }
+    .top { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+    .banner { padding: 10px 14px; gap: 2px; }
+    .banner-state strong, .banner-next .countdown { font-size: 24px; }
+    .banner-detail { font-size: 13px; }
+    .banner-next .small { font-size: 10px; }
+    .kpi { padding: 8px 12px; gap: 0; }
+    .kpi .value { font-size: 20px; }
+    .kpi .sub { font-size: 11px; }
+    /* Fill the screen height: the timeline and stations cards share whatever space is left */
+    .middle { gap: 8px; flex: 1; min-height: 0; }
+    .middle > .card { padding: 8px 12px; gap: 8px; flex: 1; }
+    .timeline { gap: 5px; }
+    .timeline .track { height: 16px; border-radius: 4px; }
+    .hours .minor { display: none; }
+    .station:nth-of-type(n+4) { display: none; } /* top 3 stations */
+    .station { gap: 3px 10px; }
+    .outages { padding: 8px 12px; }
+    .outage-list { gap: 6px; }
+    .outage-list .chip { font-size: 10px; padding: 1px 7px; }
+    .station .meter { height: 5px; }
+  }
+</style>
+
+<header class="page-head">
+  <div class="head-left">
+    <%= partial(:weather, report: page.weather) %>
+    <%= partial(:air_raid, state: page.air_raid) %>
+  </div>
+  <span class="mono clock" style="margin-left: auto"><%= clock(page.now) %></span>
+</header>
+
+<%- banner = page.banner -%>
+<section class="top">
+  <div class="card banner <%= banner[:tone] %>">
+    <%- upcoming = banner[:next] -%>
+    <div class="banner-row">
+      <div class="banner-state">
+        <strong><%= banner[:title] %></strong>
+        <span class="banner-detail"><%= banner[:detail] %></span>
+      </div>
+      <div class="banner-next">
+        <span class="small caps"><%= upcoming[:label] %></span>
+        <%- if upcoming[:value] -%><span class="countdown"><%= upcoming[:value] %></span><%- end -%>
+        <span class="small"><%= upcoming[:sub] %></span>
+      </div>
+    </div>
+    <%- if banner[:progress] -%>
+      <div class="progress"><div style="width: <%= banner[:progress] %>%"></div></div>
+    <%- end -%>
+  </div>
+  <%= partial(:kpi, tile: page.off_tile) %>
+  <%= partial(:kpi, tile: page.consumed_tile) %>
+</section>
+
+<%- if page.outages_today.any? -%>
+  <section class="card outages">
+    <div class="outage-list">
+      <%- page.outages_today.each do |o| -%>
+        <span class="chip <%= o[:when] %>"><%= hhmm(o[:from]) %>–<%= hhmm(o[:to]) %><%= " · now" if o[:when] == :now %></span>
+      <%- end -%>
+    </div>
+  </section>
+<%- end -%>
+
+<section class="middle">
+  <div class="card">
+    <%= partial(:timeline, page: page) %>
+    <%- if page.stats.no_data? -%>
+      <p class="hint full-only">Stats build up while the app is running: a sample every <%= page.settings.sample_interval %> s.</p>
+    <%- end -%>
+  </div>
+
+  <div class="card">
+    <%- page.devices.each do |device| -%>
+      <div class="station">
+        <span class="name"><%= h device.name %></span>
+        <%- if (problem = page.problem(device)) -%>
+          <span class="chip caps muted"><%= problem %></span>
+          <div class="meter"></div>
+        <%- else -%>
+          <%- soc = page.soc(device) -%>
+          <span class="nums">
+            <strong><%= soc %>%</strong>
+            <span class="muted"><%= h quota(device, "pd.wattsOutSum") %></span>
+          </span>
+          <div class="meter"><div class="<%= soc_tone(soc) %>" style="width: <%= soc %>%"></div></div>
+        <%- end -%>
+      </div>
+    <%- end -%>
+    <%- if page.devices.empty? -%>
+      <div class="muted">Loading stations…</div>
+    <%- end -%>
+  </div>
+</section>
+
+<%- unless page.settings.production? -%>
+<section class="card table-box full-only">
+  <table style="min-width: 720px">
+    <thead>
+      <tr><th>Station</th><th>Charge</th><th>In</th><th>Out</th><th>Time left</th><th>AC input</th><th>Status</th></tr>
+    </thead>
+    <tbody>
+      <%- page.devices.each do |device| -%>
+        <%- status_text, status_tone = page.status(device) -%>
+        <tr>
+          <td>
+            <a href="/device/<%= h device.sn %>" style="font-weight: 600; text-decoration: none"><%= h device.name %></a>
+            <div class="sn"><%= h device.sn %></div>
+          </td>
+          <%- if (problem = page.problem(device)) -%>
+            <td colspan="5" class="muted"><%= h(device.error || problem) %></td>
+          <%- else -%>
+            <td><%= h quota(device, "pd.soc") %></td>
+            <td><%= h quota(device, "pd.wattsInSum") %></td>
+            <td><%= h quota(device, "pd.wattsOutSum") %></td>
+            <td><%= h quota(device, EcoflowDashboard::GridDetector::DISCHARGE_KEY) %></td>
+            <td class="<%= "bad" if device.grid == false %>"><%= h quota(device, "inv.acInVol") %></td>
+          <%- end -%>
+          <td><span class="chip caps <%= status_tone %>"><%= status_text %></span></td>
+        </tr>
+      <%- end -%>
+    </tbody>
+  </table>
+</section>
+<%- end -%>
+
+<%- if page.devices.empty? -%>
+  <p class="hint full-only">Loading stations… If this stays empty, check ECOFLOW_SN and ECOFLOW_REGION in .env.</p>
+<%- end -%>

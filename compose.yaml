@@ -1,0 +1,14 @@
+# Run the production image locally: docker compose up --build  ->  http://localhost:4567
+services:
+  dashboard:
+    build: .
+    env_file: .env            # read at runtime, never copied into the image
+    environment:              # override the local-run values .env may set
+      BIND: 0.0.0.0
+      PORT: "10000"
+      DATA_DIR: /var/data
+    ports:
+      - "127.0.0.1:4567:10000" # only reachable from this computer
+    volumes:
+      - ./data:/var/data
+    restart: unless-stopped

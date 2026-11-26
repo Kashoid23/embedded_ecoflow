@@ -1,0 +1,8 @@
+<%# Air-raid alert siren. Locals: state — :none (green), :partial (yellow), :active (red),
+    :unknown (grey: not fetched yet or stale), nil = no provider configured, nothing is shown %>
+<%- if state -%>
+  <svg class="siren <%= state %>" viewBox="0 0 24 24" role="img" aria-label="Air raid: <%= state %>">
+    <path class="siren-dome" d="M7 17v-5a5 5 0 0 1 10 0v5z"/>
+    <path d="M5 20h14M12 2.5v2M4.6 5.6l1.4 1.4M19.4 5.6 18 7"/>
+  </svg>
+<%- end -%>

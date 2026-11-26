@@ -1,0 +1,15 @@
+# Secrets must never end up in the image
+.env
+.env.*
+!.env.example
+
+# Local data and tooling
+data/
+.git/
+.github/
+tmp/
+log/
+*.log
+.DS_Store
+.idea/
+.vscode/

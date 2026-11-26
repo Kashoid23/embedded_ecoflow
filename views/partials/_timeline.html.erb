@@ -1,0 +1,16 @@
+<%# 24-hour timeline in one track: actual power up to now drawn over the planned outages,
+    so the past shows what happened and the rest of the day shows the schedule.
+    Locals: page. Hour marks that aren't a multiple of 6 are .minor (hidden on the compact layout). %>
+<%- line = page.timeline -%>
+<div class="timeline">
+  <div class="track">
+    <%- line[:segments].each do |s| -%>
+      <div class="seg <%= s[:css] %>" style="left: <%= day_pct(s[:from]) %>%; width: <%= day_pct(s[:to] - s[:from]) %>%"></div>
+    <%- end -%>
+    <%- if line[:note] -%><span class="note"><%= h line[:note] %></span><%- end -%>
+    <div class="now-line" style="left: <%= day_pct(page.now_minute) %>%"></div>
+  </div>
+  <div class="hours">
+    <%- 0.step(24, 3) do |hour| -%><span class="<%= "minor" unless (hour % 6).zero? %>"><%= format("%02d", hour) %></span><%- end -%>
+  </div>
+</div>

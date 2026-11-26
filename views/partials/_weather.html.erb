@@ -1,0 +1,7 @@
+<%# Current weather: icon + temperature. Locals: report (Weather::Report or nil) %>
+<%- if report -%>
+  <span class="weather">
+    <%= weather_icon(report) %>
+    <strong><%= temperature(report.temp) %></strong>
+  </span>
+<%- end -%>

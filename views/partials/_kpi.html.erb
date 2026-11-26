@@ -1,0 +1,6 @@
+<%# A stat tile. Locals: tile — { label:, value:, tone:, sub:, sub_tone: }; tone, sub and sub_tone are optional. %>
+<div class="card kpi">
+  <div class="label"><%= h tile[:label] %></div>
+  <div class="value <%= tile[:tone] %>"><%= h tile[:value] %></div>
+  <%- if tile[:sub] -%><div class="sub <%= tile[:sub_tone] %>"><%= h tile[:sub] %></div><%- end -%>
+</div>

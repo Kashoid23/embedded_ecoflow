@@ -1,0 +1,67 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+# Starts the dashboard: background jobs + WEBrick web server.
+#   bundle exec bin/server   ->  http://localhost:4567
+
+require 'bundler/setup'
+require 'dotenv/load'
+require 'webrick'
+require_relative '../lib/ecoflow_dashboard'
+
+include EcoflowDashboard # rubocop:disable Style/MixinUsage
+
+settings = Settings.from_env
+logger   = Logger.new($stdout, level: settings.log_level, progname: 'ecoflow')
+
+client   = Ecoflow::Client.new(access_key: settings.access_key, secret_key: settings.secret_key,
+                               region: settings.region, logger: logger)
+store    = SampleStore.new(File.join(settings.data_dir, 'samples'))
+schedule = Outages::Schedule.new
+weather  = Latest.new
+air_raid = Latest.new
+sampler  = Sampler.new(client: client, store: store, settings: settings)
+
+# Background jobs
+Periodic.start('sample', settings.sample_interval, logger: logger) { sampler.tick }
+Periodic.start('prune', 24 * 3600, logger: logger) { store.prune }
+if settings.weather?
+  weather_source = Weather::OpenMeteoSource.new(lat: settings.weather_lat, lon: settings.weather_lon)
+  Periodic.start('weather', 600, logger: logger) { weather.value = weather_source.fetch }
+end
+if settings.air_raid?
+  air_raid_source = AirRaid.source(provider: settings.air_raid_provider, token: settings.air_raid_token,
+                                   region: settings.air_raid_region)
+  Periodic.start('air raid', 30, logger: logger) { air_raid.value = air_raid_source.fetch }
+end
+if settings.schedule?
+  source = Outages::OblenergoSource.new(region: settings.oblenergo, group: settings.outage_group)
+  Periodic.start('schedule', 600, logger: logger) { schedule.replace(source.fetch) }
+end
+
+# Browsers drop idle keep-alive connections (e.g. between auto-refreshes) and WEBrick logs
+# that as an ERROR with a backtrace. Nothing failed, so those are skipped; other errors still show.
+class QuietLog < WEBrick::Log
+  CLIENT_GONE = [Errno::ECONNRESET, Errno::EPIPE, Errno::ECONNABORTED].freeze
+
+  def error(msg)
+    super unless CLIENT_GONE.any? { |e| msg.is_a?(e) }
+  end
+end
+
+# Web server
+app    = Web::App.new(settings: settings, client: client, sampler: sampler, store: store, schedule: schedule,
+                      weather: weather, air_raid: air_raid)
+server = WEBrick::HTTPServer.new(BindAddress: settings.host, Port: settings.port,
+                                 Logger: QuietLog.new($stderr, WEBrick::Log::WARN), AccessLog: [])
+
+server.mount_proc '/' do |request, response|
+  response.status, headers, response.body = app.call(request.path)
+  headers.each { |name, value| response[name] = value }
+end
+
+%w[INT TERM].each { |signal| trap(signal) { server.shutdown } }
+
+logger.info("Dashboard: http://localhost:#{settings.port}")
+logger.info("Outage schedule: #{settings.schedule? ? "#{settings.oblenergo}, group #{settings.outage_group}" : 'off (set OUTAGE_GROUP in .env)'}")
+server.start
