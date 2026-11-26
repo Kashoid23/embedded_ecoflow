@@ -14,7 +14,7 @@ module EcoflowDashboard
 
       # Template path -> name of the View method it was compiled into. Templates don't
       # change while the app runs, so each is parsed and compiled to bytecode only once.
-      TEMPLATES = {}
+      TEMPLATES = {} # rubocop:disable Style/MutableConstant -- filled as templates are first used
       COMPILE = Mutex.new
 
       def initialize(dir, locals = {})

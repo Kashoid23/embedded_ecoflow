@@ -9,9 +9,6 @@ module EcoflowDashboard
       # Below this total output the backup estimate is meaningless (and huge)
       MIN_LOAD_WATTS = 5
 
-      # Battery capacity in Wh, by productName, of models that don't report their remaining charge
-      MODEL_CAPACITY = { 'RIVER 2 Pro' => 768 }.freeze
-
       GRID_TONE = { on: :ok, off: :bad }.freeze
       GRID_LABEL = { on: 'on grid', off: 'on battery' }.freeze
 
@@ -56,24 +53,25 @@ module EcoflowDashboard
       end
 
       # Total output of the stations that answered, W
-      def load_watts = @load_watts ||= readable.sum { |d| d.values['pd.wattsOutSum'].to_f }
+      def load_watts = @load_watts ||= readable.sum { |d| out_watts(d) }
 
-      # Hours the stored energy lasts at the current load, nil when it can't be told
+      def out_watts(device) = device.values[GridDetector::OUT_KEY].to_f
+
+      # Hours the stored energy lasts at the current load, nil when it can't be told.
+      # Only stations whose battery reports its remaining charge count, with their own load
+      # (so it can differ from load_watts): each station feeds only what is plugged into it.
       def backup_hours
-        return if load_watts < MIN_LOAD_WATTS
-
-        stored = readable.sum { |d| stored_wh(d) || 0 }
-        (stored / load_watts).round if stored.positive?
+        known = readable.filter_map { |d| (wh = stored_wh(d)) && [wh, out_watts(d)] }
+        stored = known.sum(&:first)
+        load   = known.sum(&:last)
+        (stored / load).round if load >= MIN_LOAD_WATTS && stored.positive?
       end
 
-      # Energy left in a station, Wh: remaining charge × pack voltage as its battery reports them,
-      # else charge % of the model's capacity; nil when neither is known
+      # Energy left in a station, Wh: remaining charge × pack voltage as its battery reports them;
+      # nil when it doesn't report them (RIVER 2 Pro)
       def stored_wh(device)
         mah, mv = device.values.values_at(*Sampler::BATTERY_KEYS)
-        return mah * mv / 1_000_000.0 if mah && mv
-
-        capacity = MODEL_CAPACITY[device.name]
-        capacity * device.values['pd.soc'].to_f / 100 if capacity
+        mah * mv / 1_000_000.0 if mah && mv
       end
 
       def schedule? = settings.schedule?
@@ -178,7 +176,8 @@ module EcoflowDashboard
 
       def readable = @readable ||= devices.reject { |d| problem(d) }
 
-      def max_gap = DayStats.max_gap(settings.sample_interval) # s
+      # s
+      def max_gap = DayStats.max_gap(settings.sample_interval)
 
       # DayStats minutes are elapsed since midnight (not wall clock), so this is right on DST change days
       def time_at(date, minutes) = date.to_time + minutes * 60
@@ -198,7 +197,7 @@ module EcoflowDashboard
       end
 
       def banner_detail
-        return 'no recent samples from the stations' unless grid
+        return 'no data from the stations' unless grid
 
         started = current[:since]
         "since #{'yesterday ' if started.to_date < today}#{clock(started)}"
@@ -209,7 +208,9 @@ module EcoflowDashboard
         return { label: 'No outages' } unless change
 
         left = countdown(change[:until] - now)
-        if change[:state] == :off
+        if change[:state] == :off && grid == :on
+          { label: 'Scheduled off', sub: "#{clock(change[:from])}–#{clock(change[:until])}" }
+        elsif change[:state] == :off
           { label: "Back at #{clock(change[:until])}", value: left, sub: "#{outage_pct.round}% of outage passed" }
         else
           { label: "Next off #{clock(change[:until])}", value: left, sub: 'hours : minutes' }

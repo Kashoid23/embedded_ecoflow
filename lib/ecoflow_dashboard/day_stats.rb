@@ -3,7 +3,7 @@
 module EcoflowDashboard
   # Daily numbers calculated from the samples of one day.
   #   consumed_wh — stations' output power × time between samples, all stations together
-  #   off_minutes — time when no station saw AC input
+  #   off_minutes — time when no grid station saw AC input (idle samples keep the state before)
   #   segments    — [{ from:, to:, state: :on/:off }] in minutes since midnight, for the timeline
   DayStats = Data.define(:consumed_wh, :off_minutes, :segments)
 
@@ -14,10 +14,13 @@ module EcoflowDashboard
     # that time counts as "no data"
     GAP_FACTOR = 3
 
+    # A grid station's sample when nothing flowed in or out: grid on and off look the same
+    IDLE = 'idle'
+
     def self.max_gap(interval) = interval * GAP_FACTOR
 
     def self.build(samples, date:, now:, interval:)
-      segments = grid_segments(samples, date: date, now: now, interval: interval)
+      segments = grid_segments(grid_ticks(samples), date: date, now: now, interval: interval)
 
       new(
         consumed_wh: consumed_wh(samples, interval),
@@ -36,14 +39,8 @@ module EcoflowDashboard
       end
     end
 
-    def self.grid_segments(samples, date:, now:, interval:)
-      max_gap = self.max_gap(interval)
-      # One state per sample time: grid is on if any station sees AC input
-      ticks = samples.group_by { |s| s['t'] }.filter_map do |t, rows|
-        states = rows.map { |r| r['grid'] }.compact
-        [t, states.any?] unless states.empty?
-      end.sort
-
+    def self.grid_segments(ticks, date:, now:, interval:)
+      max_gap  = self.max_gap(interval)
       midnight = date.to_time.to_i
       day_end  = [(date + 1).to_time.to_i, now.to_i].min # 23 or 25 h on a DST change day
       minute   = ->(t) { (t - midnight) / 60.0 }
@@ -62,6 +59,16 @@ module EcoflowDashboard
       end
     end
 
-    def no_data? = segments.empty? && consumed_wh.zero?
+    # One state per sample time, sorted: [[t, on]]. Grid is on if any grid station sees it;
+    # rows without grid are from other stations. Idle samples keep the state before.
+    def self.grid_ticks(samples)
+      previous = nil
+      samples.group_by { |s| s['t'] }.sort.filter_map do |t, rows|
+        states = rows.map { |r| r['grid'] }.compact
+        known  = states - [IDLE]
+        previous = known.any? unless known.empty?
+        [t, previous] unless states.empty? || previous.nil?
+      end
+    end
   end
 end

@@ -1,0 +1,29 @@
+AllCops:
+  TargetRubyVersion: 3.2
+  NewCops: disable
+  SuggestExtensions: false
+
+# sn (serial number) and wh (watt-hours) are the domain's own names
+Naming/MethodParameterName:
+  AllowedNames: [as, at, by, cc, db, id, if, in, io, ip, of, on, os, pp, to, sn, wh]
+
+# Keyword arguments name themselves; long lists of them are wiring, not a smell
+Metrics/ParameterLists:
+  CountKeywordArgs: false
+
+# Tests read best as one scenario per method
+Metrics:
+  Exclude:
+    - test/**/*
+
+# Ceilings at today's largest methods, so they don't grow further
+Metrics/AbcSize:
+  Max: 50
+Metrics/CyclomaticComplexity:
+  Max: 13
+Metrics/PerceivedComplexity:
+  Max: 14
+Metrics/MethodLength:
+  Max: 31
+Metrics/ClassLength:
+  Max: 145

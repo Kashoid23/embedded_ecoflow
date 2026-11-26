@@ -24,27 +24,15 @@ module EcoflowDashboard
       # Every quota (property) of a device: { "pd.soc" => 87, ... }
       def quota_all(sn) = get('/iot-open/sign/device/quota/all', sn: sn)
 
-      # Only the given quota keys
-      def quota(sn, keys) = post('/iot-open/sign/device/quota', sn: sn, params: { quotas: keys })
+      # MQTT broker login: { "certificateAccount", "certificatePassword", "url", "port", "protocol" }
+      def certification = get('/iot-open/sign/certification')
 
       private
 
       def get(path, params = {})
         uri = URI(@base + path)
         uri.query = URI.encode_www_form(params) unless params.empty?
-        perform(Net::HTTP::Get.new(uri), params)
-      end
-
-      def post(path, body)
-        request = Net::HTTP::Post.new(URI(@base + path))
-        # The server reads signed params from the JSON body only when this header is set,
-        # so it must NOT be sent with GET requests (that gives "8521 signature is wrong").
-        request['Content-Type'] = 'application/json;charset=UTF-8'
-        request.body = JSON.generate(body)
-        perform(request, body)
-      end
-
-      def perform(request, params)
+        request = Net::HTTP::Get.new(uri)
         @signer.headers(params).each { |name, value| request[name] = value }
         @logger.debug { "#{request.method} #{request.uri}" }
 

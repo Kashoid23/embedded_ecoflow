@@ -42,7 +42,23 @@ class DayStatsTest < Minitest::Test
     assert_equal 0, stats.off_minutes
   end
 
+  # Nothing flowed (idle): the state before carries on; other stations' rows (no grid) don't count
+  def test_idle_samples_keep_the_previous_state
+    idle  = samples(60, 90, grid: 'idle')
+    other = (90...120).map { |m| { 't' => MIDNIGHT + m * 60, 'sn' => 'B', 'out' => 10 } }
+    stats = build(samples(0, 60, grid: false) + idle + other)
+
+    assert_equal [{ from: 0.0, to: 90.0, state: :off }], stats.segments
+    assert_in_delta 90, stats.off_minutes
+  end
+
+  def test_idle_samples_alone_decide_nothing
+    assert_empty build(samples(0, 30, grid: 'idle')).segments
+  end
+
   def test_no_samples
-    assert_predicate build([]), :no_data?
+    stats = build([])
+    assert_empty stats.segments
+    assert_equal 0, stats.consumed_wh
   end
 end

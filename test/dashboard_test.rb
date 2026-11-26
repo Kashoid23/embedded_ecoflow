@@ -56,6 +56,18 @@ class DashboardTest < Minitest::Test
     assert_nil banner[:progress]
   end
 
+  # The schedule says off, the stations still see the grid: nothing to count down to
+  def test_power_on_during_planned_outage_shows_no_countdown
+    @schedule.replace({ TODAY => [[600, 960, :definite]] }) # 10:00–16:00
+    power_on_since(0)
+
+    banner = dashboard.banner
+
+    assert_equal ['Power on', :ok], banner.values_at(:title, :tone)
+    assert_equal({ label: 'Scheduled off', sub: '10:00–16:00' }, banner[:next])
+    assert_nil banner[:progress]
+  end
+
   def test_unplanned_outage_is_not_in_schedule
     @schedule.replace({ TODAY => [[900, 1020, :definite]] }) # 15:00–17:00, but power is already off
     no_power_since(600)
@@ -83,6 +95,24 @@ class DashboardTest < Minitest::Test
     assert_nil banner[:progress]
   end
 
+  # The grid station went idle at 11:00 (nothing in or out): power is still shown as on, the last known state
+  def test_idle_grid_station_keeps_last_state
+    (480...660).each { |m| @store.append(Time.new(2026, 11, 26) + m * 60, [{ sn: 'A', out: 50, grid: true }]) }
+    (660..720).each { |m| @store.append(Time.new(2026, 11, 26) + m * 60, [{ sn: 'A', out: 0, grid: 'idle' }]) }
+    banner = dashboard({}).banner
+
+    assert_equal ['Power on', :ok], banner.values_at(:title, :tone)
+    assert_equal 'since 08:00', banner[:detail]
+  end
+
+  # After a gap (e.g. a restart) the state carries on over idle samples only
+  def test_idle_from_the_start_of_the_state
+    (480...660).each { |m| @store.append(Time.new(2026, 11, 26) + m * 60, [{ sn: 'A', out: 50, grid: true }]) }
+    (700..720).each { |m| @store.append(Time.new(2026, 11, 26) + m * 60, [{ sn: 'A', out: 0, grid: 'idle' }]) }
+
+    assert_equal ['Power on', 'since 11:40'], dashboard({}).banner.values_at(:title, :detail)
+  end
+
   def test_off_tile
     @schedule.replace({ TODAY => [[0, 360, :definite]] })
     no_power_since(610) # 10:10–12:00
@@ -99,12 +129,11 @@ class DashboardTest < Minitest::Test
     tile = page.consumed_tile
 
     assert_equal ['Consumed today', '0 Wh'], tile.values_at(:label, :value)
-    assert_equal 'now 82 W · backup ~22 h', tile[:sub] # (1024 from the battery + 768 by model) Wh / 82 W
+    assert_equal 'now 82 W · backup ~34 h', tile[:sub] # 1024 Wh / 30 W: RIVER 2 Pro doesn't report its charge
   end
 
   def test_consumed_tile_without_backup
     assert_equal 'now 3 W', dashboard(devices: [station(soc: 50, out: 3)]).consumed_tile[:sub] # load too low
-    assert_equal 'now 82 W', dashboard(devices: [station(soc: 50, out: 82, name: 'RIVER 3')]).consumed_tile[:sub]
     assert_equal 'now 82 W', dashboard(devices: [station(soc: 50, out: 82)]).consumed_tile[:sub] # no battery data
   end
 

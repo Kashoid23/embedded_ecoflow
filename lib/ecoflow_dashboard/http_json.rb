@@ -14,7 +14,9 @@ module EcoflowDashboard
     def request(req, error:)
       uri      = req.uri
       response = Net::HTTP.start(uri.host, uri.port, use_ssl: uri.scheme == 'https',
-                                                     open_timeout: TIMEOUT, read_timeout: TIMEOUT) { |http| http.request(req) }
+                                                     open_timeout: TIMEOUT, read_timeout: TIMEOUT) do |http|
+        http.request(req)
+      end
       raise error, "#{uri.host}: HTTP #{response.code}" unless response.is_a?(Net::HTTPSuccess)
 
       JSON.parse(response.body)

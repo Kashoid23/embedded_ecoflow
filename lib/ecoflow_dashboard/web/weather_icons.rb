@@ -8,7 +8,8 @@ module EcoflowDashboard
       CLOUD      = '<path class="w-cloud" d="M7 19h10a4 4 0 0 0 .6-7.95A6 6 0 0 0 6.2 11.2 3.9 3.9 0 0 0 7 19z"/>'
       CLOUD_HIGH = '<path class="w-cloud" d="M7 15h10a4 4 0 0 0 .6-7.95A6 6 0 0 0 6.2 7.2 3.9 3.9 0 0 0 7 15z"/>'
       SUN        = '<g class="w-sun"><circle cx="12" cy="12" r="4"/>' \
-                   '<path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></g>'
+                   '<path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4' \
+                   'M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></g>'
       MOON       = '<path class="w-moon" d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z"/>'
 
       ICONS = {
@@ -19,7 +20,8 @@ module EcoflowDashboard
         cloudy: CLOUD,
         fog: '<path class="w-cloud" d="M4 9h16M2 13h20M5 17h14"/>',
         rain: %(#{CLOUD_HIGH}<path class="w-rain" d="M8 18l-1 3M12 18l-1 3M16 18l-1 3"/>),
-        snow: %(#{CLOUD_HIGH}<g class="w-snow"><circle cx="8" cy="19" r="1"/><circle cx="12" cy="21" r="1"/><circle cx="16" cy="19" r="1"/></g>),
+        snow: "#{CLOUD_HIGH}<g class=\"w-snow\"><circle cx=\"8\" cy=\"19\" r=\"1\"/>" \
+              '<circle cx="12" cy="21" r="1"/><circle cx="16" cy="19" r="1"/></g>',
         thunder: %(#{CLOUD_HIGH}<path class="w-bolt" d="M13 15l-3 4h4l-2 4"/>)
       }.freeze
 

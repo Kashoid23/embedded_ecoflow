@@ -4,6 +4,8 @@ module EcoflowDashboard
   module Web
     # Formatting helpers available in every template.
     module Helpers
+      NOT_DISCHARGING = 5999 # time left value while the battery isn't draining
+
       # How a quota value is shown: a unit suffix, or a lambda (called with the helpers as self)
       FORMATS = {
         'pd.soc' => '%',
@@ -13,8 +15,8 @@ module EcoflowDashboard
         'inv.inputWatts' => 'W',
         'inv.outputWatts' => 'W',
         'mppt.inWatts' => 'W',
-        'inv.acInVol' => ->(mv) { "#{GridDetector.mv_to_v(mv).round} V" },
-        GridDetector::DISCHARGE_KEY => ->(minutes) { remaining(minutes) }
+        'inv.acInVol' => ->(mv) { "#{(mv.to_f / 1000).round} V" }, # millivolts
+        Sampler::TIME_LEFT_KEY => ->(minutes) { remaining(minutes) }
       }.freeze
 
       def format_value(key, value)
@@ -31,19 +33,19 @@ module EcoflowDashboard
       def quota(device, key) = format_value(key, device.values[key])
 
       def remaining(minutes)
-        GridDetector.draining?(minutes) ? short_duration(minutes) : '—'
+        minutes.to_i.between?(1, NOT_DISCHARGING - 1) ? short_duration(minutes) : '—'
       end
 
       # "1h 50m", "6h 00m"
       def short_duration(minutes)
         hours, rest = minutes.round.divmod(60)
-        format('%dh %02dm', hours, rest)
+        format('%<h>dh %<m>02dm', h: hours, m: rest)
       end
 
       # Seconds to go -> "3:39" (hours:minutes, rounded up so it never reads 0:00 early)
       def countdown(seconds)
         hours, rest = (seconds / 60.0).ceil.clamp(0..).divmod(60)
-        format('%d:%02d', hours, rest)
+        format('%<h>d:%<m>02d', h: hours, m: rest)
       end
 
       # Charge bar tone by level (CSS class, coloured by the theme)
@@ -69,7 +71,7 @@ module EcoflowDashboard
       # Minutes since midnight -> "14:30"
       def hhmm(minutes)
         minutes = minutes.round
-        format('%02d:%02d', (minutes / 60) % 24, minutes % 60)
+        format('%<h>02d:%<m>02d', h: (minutes / 60) % 24, m: minutes % 60)
       end
     end
   end

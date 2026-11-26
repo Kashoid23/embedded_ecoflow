@@ -20,10 +20,17 @@ store    = SampleStore.new(File.join(settings.data_dir, 'samples'))
 schedule = Outages::Schedule.new
 weather  = Latest.new
 air_raid = Latest.new
-sampler  = Sampler.new(client: client, store: store, settings: settings)
+# Live values from the stations over MQTT; without ECOFLOW_SN every station on the account
+stream   = Ecoflow::Stream.new(client: client, logger: logger,
+                               sns: -> { settings.station_sns { client.devices.map { |d| d['sn'] } } })
+stream.start
+sampler = Sampler.new(client: client, source: stream, store: store, settings: settings)
 
 # Background jobs
-Periodic.start('sample', settings.sample_interval, logger: logger) { sampler.tick }
+Thread.new do
+  stream.wait_for_data(30)
+  Periodic.start('sample', settings.sample_interval, logger: logger) { sampler.tick }
+end
 Periodic.start('prune', 24 * 3600, logger: logger) { store.prune }
 if settings.weather?
   weather_source = Weather::OpenMeteoSource.new(lat: settings.weather_lat, lon: settings.weather_lon)
@@ -63,5 +70,8 @@ end
 %w[INT TERM].each { |signal| trap(signal) { server.shutdown } }
 
 logger.info("Dashboard: http://localhost:#{settings.port}")
-logger.info("Outage schedule: #{settings.schedule? ? "#{settings.oblenergo}, group #{settings.outage_group}" : 'off (set OUTAGE_GROUP in .env)'}")
+outages = if settings.schedule? then "#{settings.oblenergo}, group #{settings.outage_group}"
+          else 'off (set OUTAGE_GROUP in .env)'
+          end
+logger.info("Outage schedule: #{outages}")
 server.start

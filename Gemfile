@@ -6,6 +6,7 @@ ruby '>= 3.2' # Data.define
 
 gem 'dotenv'  # loads .env into ENV
 gem 'logger'  # no longer a default gem from Ruby 3.5
+gem 'mqtt'    # live station values from the EcoFlow MQTT broker
 gem 'webrick' # not bundled with Ruby since 3.0
 
 group :test do

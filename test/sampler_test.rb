@@ -25,7 +25,7 @@ class SamplerTest < Minitest::Test
   end
 
   def tick
-    sampler = Sampler.new(client: @client, store: @store, settings: settings)
+    sampler = Sampler.new(client: @client, source: @client, store: @store, settings: settings)
     sampler.tick(NOW)
     sampler
   end

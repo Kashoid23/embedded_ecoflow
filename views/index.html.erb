@@ -141,39 +141,35 @@
 <section class="middle">
   <div class="card">
     <%= partial(:timeline, page: page) %>
-    <%- if page.stats.no_data? -%>
-      <p class="hint full-only">Stats build up while the app is running: a sample every <%= page.settings.sample_interval %> s.</p>
-    <%- end -%>
   </div>
 
-  <div class="card">
-    <%- page.devices.each do |device| -%>
-      <div class="station">
-        <span class="name"><%= h device.name %></span>
-        <%- if (problem = page.problem(device)) -%>
-          <span class="chip caps muted"><%= problem %></span>
-          <div class="meter"></div>
-        <%- else -%>
-          <%- soc = page.soc(device) -%>
-          <span class="nums">
-            <strong><%= soc %>%</strong>
-            <span class="muted"><%= h quota(device, "pd.wattsOutSum") %></span>
-          </span>
-          <div class="meter"><div class="<%= soc_tone(soc) %>" style="width: <%= soc %>%"></div></div>
-        <%- end -%>
-      </div>
-    <%- end -%>
-    <%- if page.devices.empty? -%>
-      <div class="muted">Loading stations…</div>
-    <%- end -%>
-  </div>
+  <%- if page.devices.any? -%>
+    <div class="card">
+      <%- page.devices.each do |device| -%>
+        <div class="station">
+          <span class="name"><%= h device.name %></span>
+          <%- if (problem = page.problem(device)) -%>
+            <span class="chip caps muted"><%= problem %></span>
+            <div class="meter"></div>
+          <%- else -%>
+            <%- soc = page.soc(device) -%>
+            <span class="nums">
+              <strong><%= soc %>%</strong>
+              <span class="muted"><%= h quota(device, "pd.wattsOutSum") %></span>
+            </span>
+            <div class="meter"><div class="<%= soc_tone(soc) %>" style="width: <%= soc %>%"></div></div>
+          <%- end -%>
+        </div>
+      <%- end -%>
+    </div>
+  <%- end -%>
 </section>
 
-<%- unless page.settings.production? -%>
+<%- if !page.settings.production? && page.devices.any? -%>
 <section class="card table-box full-only">
   <table style="min-width: 720px">
     <thead>
-      <tr><th>Station</th><th>Charge</th><th>In</th><th>Out</th><th>Time left</th><th>AC input</th><th>Status</th></tr>
+      <tr><th>Station</th><th>Charge</th><th>In</th><th>Out</th><th>Time left</th><th>Status</th></tr>
     </thead>
     <tbody>
       <%- page.devices.each do |device| -%>
@@ -184,13 +180,12 @@
             <div class="sn"><%= h device.sn %></div>
           </td>
           <%- if (problem = page.problem(device)) -%>
-            <td colspan="5" class="muted"><%= h(device.error || problem) %></td>
+            <td colspan="4" class="muted"><%= h(device.error || problem) %></td>
           <%- else -%>
             <td><%= h quota(device, "pd.soc") %></td>
-            <td><%= h quota(device, "pd.wattsInSum") %></td>
+            <td><%= h quota(device, "inv.inputWatts") %></td>
             <td><%= h quota(device, "pd.wattsOutSum") %></td>
-            <td><%= h quota(device, EcoflowDashboard::GridDetector::DISCHARGE_KEY) %></td>
-            <td class="<%= "bad" if device.grid == false %>"><%= h quota(device, "inv.acInVol") %></td>
+            <td><%= h quota(device, EcoflowDashboard::Sampler::TIME_LEFT_KEY) %></td>
           <%- end -%>
           <td><span class="chip caps <%= status_tone %>"><%= status_text %></span></td>
         </tr>
@@ -200,6 +195,3 @@
 </section>
 <%- end -%>
 
-<%- if page.devices.empty? -%>
-  <p class="hint full-only">Loading stations… If this stays empty, check ECOFLOW_SN and ECOFLOW_REGION in .env.</p>
-<%- end -%>

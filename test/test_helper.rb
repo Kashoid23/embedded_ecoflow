@@ -16,9 +16,9 @@ module TestSupport
     EcoflowDashboard::Settings.from_env(ENV_BASE.merge('DATA_DIR' => @tmp || Dir.tmpdir).merge(env))
   end
 
-  # Stands in for Ecoflow::Client
+  # Stands in for Ecoflow::Client (devices, quota_all) and Ecoflow::Stream (quota)
   class FakeClient
-    attr_accessor :grid, :out, :soc, :missing # soc: BatteryTrend charge, nil = not reported; missing: quota keys this station doesn't report
+    attr_accessor :grid, :out, :missing # missing: quota keys this station doesn't report
 
     def initialize
       @grid    = true
@@ -35,11 +35,9 @@ module TestSupport
       raise EcoflowDashboard::Ecoflow::Client::Error, 'API 1006: not allowed' if sn == 'BBB2'
 
       # With the grid present the load runs through the station's input (bypass)
-      { 'pd.soc' => 80, 'pd.wattsInSum' => grid ? out : 0, 'pd.wattsOutSum' => out,
-        'bms_emsStatus.dsgRemainTime' => grid ? 5999 : 125, 'inv.acInVol' => grid ? 230_000 : 0,
-        'bms_bmsStatus.remainCap' => 30_000, 'bms_bmsStatus.vol' => 54_000,
-        'inv.acInFreq' => 50, 'inv.invOutVol' => 230_500,
-        EcoflowDashboard::BatteryTrend::KEY => soc }.compact.slice(*keys).except(*missing)
+      { 'pd.soc' => 80, 'inv.inputWatts' => grid ? out : 0, 'pd.wattsInSum' => grid ? out : 0, 'pd.wattsOutSum' => out,
+        'bms_emsStatus.dsgRemainTime' => grid ? 5999 : 125, 'bms_bmsStatus.outputWatts' => grid ? 0 : out,
+        'bms_bmsStatus.remainCap' => 30_000, 'bms_bmsStatus.vol' => 54_000 }.slice(*keys).except(*missing)
     end
 
     def quota_all(_sn) = { 'pd.soc' => 80, 'inv.acInVol' => 230_000 }

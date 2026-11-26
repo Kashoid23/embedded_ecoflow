@@ -54,6 +54,9 @@ module EcoflowDashboard
 
     def air_raid? = !air_raid_provider.nil?
 
+    # Stations to watch (ECOFLOW_SN); empty = every station on the account, from the block
+    def station_sns = device_sns.empty? ? yield : device_sns
+
     # Stations plugged into the wall (ECOFLOW_GRID_SN). Empty = every station.
     # A station charged from another station's outlet must not be listed: during an outage
     # it still sees 230 V on its input.

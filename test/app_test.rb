@@ -12,7 +12,7 @@ class AppTest < Minitest::Test
     @client   = FakeClient.new
     @store    = SampleStore.new(File.join(@tmp, 'samples'))
     @schedule = Outages::Schedule.new
-    @sampler  = Sampler.new(client: @client, store: @store, settings: @settings)
+    @sampler  = Sampler.new(client: @client, source: @client, store: @store, settings: @settings)
 
     # 10:00–12:00, power lost at 11:00
     (600...720).each do |minute|
@@ -34,10 +34,10 @@ class AppTest < Minitest::Test
   def test_production_hides_stations_table
     body = production_app.call('/')[2]
 
-    refute_match 'AC input', body        # table header
+    refute_match 'Time left', body       # table header
     refute_match '/device/AAA1', body    # links to the raw-values pages are in the table only
     assert_match 'DELTA 2 Max', body     # the station cards stay
-    assert_match 'AC input', @app.call('/')[2] # development still shows it
+    assert_match 'Time left', @app.call('/')[2] # development still shows it
   end
 
   def test_production_has_no_raw_data_pages
@@ -63,10 +63,10 @@ class AppTest < Minitest::Test
     assert_match %r{Without power today</div>\s*<div class="value bad">1h 00m</div>}, body
     assert_match 'now 100 W · backup ~16 h', body   # 30 Ah × 54 V = 1620 Wh / 100 W
     assert_match 'API 1006: not allowed', body      # station that can't be read
-    assert_match %r{<span class="name">RIVER 3</span>\s*<span class="chip caps muted">unavailable</span>}, body # still listed
+    # still listed
+    assert_match %r{<span class="name">RIVER 3</span>\s*<span class="chip caps muted">unavailable</span>}, body
     assert_match 'DELTA 2 Max', body
-    assert_match 'AC input', body                   # input voltage column
-    refute_match 'row-label', body                  # timeline rows have no labels
+    refute_match 'row-label', body # timeline rows have no labels
     refute_match 'Total output', body
   end
 
@@ -75,25 +75,33 @@ class AppTest < Minitest::Test
     # but a non-grid station must get grid: nil in the samples
     s = settings('ECOFLOW_GRID_SN' => 'ZZZ9')
     store = SampleStore.new(File.join(@tmp, 'other'))
-    Sampler.new(client: @client, store: store, settings: s).tick(NOW)
+    Sampler.new(client: @client, source: @client, store: store, settings: s).tick(NOW)
 
     assert_nil store.read(NOW.to_date).first['grid']
   end
 
-  # Raw AC readings are kept in each sample, to find which one changes in a real outage
-  def test_samples_keep_ac_readings
-    store = SampleStore.new(File.join(@tmp, 'ac'))
-    sampler = Sampler.new(client: @client, store: store, settings: @settings)
-    @client.grid = true
+  # Nothing flows in or out of the grid station: stored as idle, not as a decision
+  def test_idle_grid_station_sample
+    store = SampleStore.new(File.join(@tmp, 'idle'))
+    @client.out = 0
+    Sampler.new(client: @client, source: @client, store: store, settings: @settings).tick(NOW)
+
+    assert_equal 'idle', store.read(NOW.to_date).first['grid']
+  end
+
+  # The battery readings behind the grid decision are kept in each sample, to check it against a real outage
+  def test_samples_keep_grid_readings
+    store = SampleStore.new(File.join(@tmp, 'readings'))
+    sampler = Sampler.new(client: @client, source: @client, store: store, settings: @settings)
+    @client.grid = false
     sampler.tick(NOW)
     row = store.read(NOW.to_date).first
 
-    assert_equal({ 'ac_in_v' => 230.0, 'ac_in_hz' => 50, 'ac_out_v' => 230.5 },
-                 row.slice('ac_in_v', 'ac_in_hz', 'ac_out_v'))
+    assert_equal({ 'grid' => false, 'in' => 0.0, 'bat' => 100 }, row.slice('grid', 'in', 'bat'))
 
-    @client.missing = %w[inv.acInFreq] # a station that doesn't report a reading gets no such field
+    @client.missing = %w[bms_bmsStatus.outputWatts] # a station that doesn't report a reading gets no such field
     sampler.tick(NOW + 60)
-    refute_includes store.read(NOW.to_date).last.keys, 'ac_in_hz'
+    refute_includes store.read(NOW.to_date).last.keys, 'bat'
   end
 
   def test_one_page_for_both_screens

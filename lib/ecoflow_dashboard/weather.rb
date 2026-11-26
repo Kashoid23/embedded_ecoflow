@@ -24,6 +24,7 @@ module EcoflowDashboard
       def kind = KINDS.fetch(code, :cloudy)
     end
 
+    # Current weather at the given coordinates from Open-Meteo (free, no API key)
     class OpenMeteoSource
       URL = 'https://api.open-meteo.com/v1/forecast?latitude=%s&longitude=%s' \
             '&current=temperature_2m,weather_code,is_day'
